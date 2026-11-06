@@ -1,0 +1,132 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Represents a family member user profile in Kinfolk",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Unique identifier of the user" },
+        "username": { "type": "string", "description": "Unique username chosen by member" },
+        "displayName": { "type": "string", "description": "Display name shown in chat" },
+        "role": { "type": "string", "enum": ["owner", "member"], "description": "Role in the family space" },
+        "passwordHash": { "type": "string", "description": "Salted SHA-256 hash of password" },
+        "recoveryCodeHash": { "type": "string", "description": "Salted hash of emergency recovery code" },
+        "avatarUrl": { "type": "string", "description": "Optional avatar URL" },
+        "isOnline": { "type": "boolean", "description": "Real-time presence indicator" },
+        "lastSeen": { "type": "string", "format": "date-time", "description": "Server timestamp of last activity" },
+        "showLastSeen": { "type": "boolean", "description": "Privacy preference for last seen" },
+        "showReadReceipts": { "type": "boolean", "description": "Privacy preference for read receipts" },
+        "showTyping": { "type": "boolean", "description": "Privacy preference for typing indicator" },
+        "blockScreenshots": { "type": "boolean", "description": "Privacy preference for screenshot blocking" },
+        "isLocked": { "type": "boolean", "description": "Whether account is locked by admin" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last profile update timestamp" }
+      },
+      "required": ["userId", "username", "displayName", "role", "passwordHash", "recoveryCodeHash", "isOnline", "createdAt"]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "Single-use or reusable invitation token issued by the owner",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "description": "Invitation code e.g. KIN-1234" },
+        "createdBy": { "type": "string", "description": "User ID of the owner who created this invitation" },
+        "status": { "type": "string", "enum": ["pending", "used", "revoked"], "description": "Current status" },
+        "usedBy": { "type": "string", "description": "User ID of member who redeemed the code" },
+        "usedAt": { "type": "string", "format": "date-time", "description": "Timestamp when redeemed" },
+        "expiresAt": { "type": "string", "format": "date-time", "description": "Timestamp when invitation expires" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when invitation was generated" }
+      },
+      "required": ["code", "createdBy", "status", "expiresAt", "createdAt"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Private 1-on-1 or group conversation channel",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Conversation identifier" },
+        "participants": { "type": "array", "description": "User IDs of participants in this conversation" },
+        "lastMessage": { "type": "object", "description": "Preview map of last message" },
+        "pinnedMessageId": { "type": "string", "description": "Optional ID of pinned message" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last activity timestamp" }
+      },
+      "required": ["participants", "createdAt", "updatedAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Message item sent within a conversation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique message ID" },
+        "conversationId": { "type": "string", "description": "Parent conversation ID" },
+        "senderId": { "type": "string", "description": "User ID of the sender" },
+        "senderName": { "type": "string", "description": "Display name of the sender" },
+        "content": { "type": "string", "description": "Text content or media caption" },
+        "type": { "type": "string", "enum": ["text", "image", "audio", "document", "system_screenshot"], "description": "Type of message payload" },
+        "mediaUrl": { "type": "string", "description": "Optional media attachment URL or base64 data" },
+        "mediaName": { "type": "string", "description": "Optional attachment filename" },
+        "mediaSize": { "type": "integer", "description": "Size in bytes" },
+        "replyToId": { "type": "string", "description": "Referenced message ID if this is a reply" },
+        "replyToText": { "type": "string", "description": "Snippet of message being replied to" },
+        "replyToSender": { "type": "string", "description": "Sender name of message being replied to" },
+        "reactions": { "type": "object", "description": "Map of emoji to list of user IDs who reacted" },
+        "readBy": { "type": "array", "description": "List of user IDs who have seen this message" },
+        "isEdited": { "type": "boolean", "description": "Whether this message was edited" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp of message creation" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last message edit" }
+      },
+      "required": ["conversationId", "senderId", "senderName", "content", "type", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Administrative security audit log event",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "description": "Action performed, e.g. INVITE_CREATED" },
+        "performedBy": { "type": "string", "description": "User ID who performed the action" },
+        "targetUser": { "type": "string", "description": "Optional target user ID" },
+        "details": { "type": "string", "description": "Details of the security event" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Timestamp of event" }
+      },
+      "required": ["action", "performedBy", "details", "timestamp"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Marks a user as having owner/admin rights",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "User ID of the admin" },
+        "role": { "type": "string", "description": "Role descriptor" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of designation" }
+      },
+      "required": ["userId", "role", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Stores user profiles for family members"
+    },
+    "/invitations/{code}": {
+      "schema": { "$ref": "#/entities/Invitation" },
+      "description": "Stores invitation codes generated by the owner"
+    },
+    "/conversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/Conversation" },
+      "description": "Stores conversation channels"
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Stores messages in a conversation"
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Stores administrative audit trail"
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/Admin" },
+      "description": "Lookup table for admin privileges"
+    }
+  }
+}

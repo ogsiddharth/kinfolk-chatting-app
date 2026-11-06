@@ -1,0 +1,6 @@
+{
+  "name": "Kinfolk",
+  "description": "Private, lightweight, distraction-free family messaging application.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

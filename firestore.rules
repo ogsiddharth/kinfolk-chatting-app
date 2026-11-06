@@ -1,0 +1,169 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all unknown paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isConversationParticipant(convId, uid) {
+      return exists(/databases/$(database)/documents/conversations/$(convId)) &&
+             uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
+    }
+
+    // --- Validation Functions ---
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() > 0 &&
+             data.username is string && data.username.size() >= 2 && data.username.size() <= 32 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 50 &&
+             data.role in ['owner', 'member'] &&
+             data.passwordHash is string && data.passwordHash.size() >= 16 &&
+             data.recoveryCodeHash is string && data.recoveryCodeHash.size() >= 16 &&
+             (!('avatarUrl' in data) || data.avatarUrl == null || (data.avatarUrl is string && data.avatarUrl.size() <= 2000000)) &&
+             data.isOnline is bool &&
+             (!('lastSeen' in data) || data.lastSeen == null || (data.lastSeen is timestamp && data.lastSeen <= request.time)) &&
+             (!('showLastSeen' in data) || data.showLastSeen is bool) &&
+             (!('showReadReceipts' in data) || data.showReadReceipts is bool) &&
+             (!('showTyping' in data) || data.showTyping is bool) &&
+             (!('blockScreenshots' in data) || data.blockScreenshots is bool) &&
+             (!('isLocked' in data) || data.isLocked is bool) &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidInvitation(data) {
+      return data.code is string && data.code.size() >= 4 && data.code.size() <= 32 &&
+             data.createdBy is string && data.createdBy.size() > 0 &&
+             data.status in ['pending', 'used', 'revoked'] &&
+             (!('usedBy' in data) || data.usedBy == null || data.usedBy is string) &&
+             (!('usedAt' in data) || data.usedAt == null || data.usedAt is timestamp) &&
+             data.expiresAt is timestamp &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidConversation(data) {
+      return data.participants is list && data.participants.size() >= 1 && data.participants.size() <= 10 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidMessage(data) {
+      return data.conversationId is string && data.conversationId.size() > 0 &&
+             data.senderId is string && data.senderId.size() > 0 &&
+             data.senderName is string && data.senderName.size() > 0 &&
+             data.content is string && data.content.size() <= 10000 &&
+             data.type in ['text', 'image', 'audio', 'document', 'system_screenshot'] &&
+             (!('mediaUrl' in data) || data.mediaUrl == null || (data.mediaUrl is string && data.mediaUrl.size() <= 2000000)) &&
+             (!('mediaName' in data) || data.mediaName == null || data.mediaName is string) &&
+             (!('mediaSize' in data) || data.mediaSize == null || data.mediaSize is int) &&
+             (!('replyToId' in data) || data.replyToId == null || data.replyToId is string) &&
+             (!('replyToText' in data) || data.replyToText == null || data.replyToText is string) &&
+             (!('replyToSender' in data) || data.replyToSender == null || data.replyToSender is string) &&
+             (!('reactions' in data) || data.reactions is map) &&
+             (!('readBy' in data) || data.readBy is list) &&
+             (!('isEdited' in data) || data.isEdited is bool) &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidAuditLog(data) {
+      return data.action is string && data.action.size() > 0 && data.action.size() <= 64 &&
+             data.performedBy is string && data.performedBy.size() > 0 &&
+             data.details is string && data.details.size() <= 1000 &&
+             data.timestamp is timestamp && data.timestamp <= request.time;
+    }
+
+    // --- Collection Rules ---
+
+    // 1. Users
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() &&
+                       request.auth.uid == userId &&
+                       incoming().userId == userId &&
+                       isValidUserProfile(incoming());
+      allow update: if isSignedIn() &&
+                       (request.auth.uid == userId || isAdmin()) &&
+                       isValidUserProfile(incoming());
+      allow delete: if isSignedIn() &&
+                       (request.auth.uid == userId || isAdmin());
+    }
+
+    // 2. Invitations
+    match /invitations/{code} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() &&
+                       (isAdmin() || incoming().createdBy == request.auth.uid) &&
+                       isValidInvitation(incoming());
+      allow update: if isSignedIn() &&
+                       isValidInvitation(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // 3. Conversations
+    match /conversations/{conversationId} {
+      allow get: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn() &&
+                       request.auth.uid in incoming().participants &&
+                       isValidConversation(incoming());
+      allow update: if isSignedIn() &&
+                       request.auth.uid in existing().participants &&
+                       isValidConversation(incoming());
+      allow delete: if isAdmin();
+
+      // Subcollection: Messages
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && isConversationParticipant(conversationId, request.auth.uid);
+        allow list: if isSignedIn() && isConversationParticipant(conversationId, request.auth.uid);
+        allow create: if isSignedIn() &&
+                         incoming().senderId == request.auth.uid &&
+                         isConversationParticipant(conversationId, request.auth.uid) &&
+                         isValidMessage(incoming());
+        allow update: if isSignedIn() &&
+                         isConversationParticipant(conversationId, request.auth.uid) &&
+                         isValidMessage(incoming());
+        allow delete: if isSignedIn() &&
+                         (existing().senderId == request.auth.uid || isAdmin());
+      }
+    }
+
+    // 4. Audit Logs
+    match /audit_logs/{logId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isValidAuditLog(incoming());
+      allow update, delete: if false;
+    }
+
+    // 5. Admins
+    match /admins/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() &&
+                       (isAdmin() || request.auth.uid == userId);
+      allow update, delete: if isAdmin();
+    }
+  }
+}
